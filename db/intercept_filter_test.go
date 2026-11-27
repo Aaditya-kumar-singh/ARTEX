@@ -141,14 +141,15 @@ func TestInterceptApprovalFilters(t *testing.T) {
 		}
 	}
 
-		modelInput := json.RawMessage(`{"script_files":[{"path":"scripts/check.py","content":"https://example.test/a?x=100%"}]}`)
-	searchID, err := d.CreateDecidedIntercept(0, 0, scope, "search-agent", "Bash", []byte(`{"command":"python3 scripts/check.py"}`), "denied", "[模型] searched", &InterceptAudit{ModelInput: modelInput, Output: "response contains example.test"})
+	modelInput := json.RawMessage(`{"script_files":[{"path":"scripts/check.py","content":"https://example.test/a?x=100%"}]}`)
+	searchID, err := d.CreateDecidedIntercept(0, 0, scope, "search-agent", "Bash", []byte(`{"command":"python3 scripts/check.py"}`), "denied", "[\u6a21\u578b] searched", &InterceptAudit{ModelInput: modelInput, Output: "response contains example.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = d.Exec(`UPDATE intercept_pending SET created_at='2099-01-01' WHERE id=$1`, searchID); err != nil {
 		t.Fatal(err)
-	}rows, total, err = d.ListTaskInterceptsPage(scope, 1, 20, InterceptApprovalFilter{Search: "example.test"})
+	}
+	rows, total, err = d.ListTaskInterceptsPage(scope, 1, 20, InterceptApprovalFilter{Search: "example.test"})
 	if err != nil || total != 1 || len(rows) != 1 || rows[0].ID != searchID {
 		t.Fatalf("snapshot search total=%d rows=%d err=%v", total, len(rows), err)
 	}
