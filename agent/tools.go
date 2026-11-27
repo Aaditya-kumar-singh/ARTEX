@@ -555,13 +555,18 @@ func (t *ToolSet) graphOverviewData() map[string]any {
 							companyScope = make([]map[string]any, 0, len(company.Scope))
 							for _, rule := range company.Scope {
 								entry := map[string]any{"id": rule.ID, "company_id": rule.CompanyID, "kind": rule.Kind}
-								if rule.Domain != "" { entry["domain"] = rule.Domain }
-								if rule.Net != "" { entry["net"] = rule.Net }
-								if rule.Value != "" { entry["value"] = rule.Value }
-								if rule.Raw != "" { entry["raw"] = rule.Raw }
+								// Preserve the operator-entered scope text in value; retain the
+								// parser's canonical form separately for deterministic matching.
+								if rule.Domain != "" { entry["normalized_value"] = rule.Domain }
+								if rule.Net != "" { entry["normalized_value"] = rule.Net }
+								if rule.Value != "" { entry["normalized_value"] = rule.Value }
+								if rule.Raw != "" {
+									entry["value"] = rule.Raw
+									entry["raw"] = rule.Raw
+								}
 								if rule.Reason != "" { entry["reason"] = rule.Reason }
 								companyScope = append(companyScope, entry)
-								if rule.Kind == "keyword" && rule.Value != "" { companyKeywords = append(companyKeywords, rule.Value) }
+								if rule.Kind == "keyword" && rule.Raw != "" { companyKeywords = append(companyKeywords, rule.Raw) }
 							}
 						}
 						row["company_scope"] = companyScope
