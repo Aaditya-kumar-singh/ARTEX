@@ -18,6 +18,20 @@ jobs:
   backend:
     name: Go tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: artex-ci-test
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -28,8 +42,24 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run backend tests
-        run: go test ./...
+      - name: Run backend tests with isolated databases
+        env:
+          POSTGRES_PASSWORD: artex-ci-test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Each Go package gets a fresh database. ARTEX integration tests create
+          # persistent task/settings fixtures, so sharing one database across
+          # packages can cause cross-package test interference.
+          while IFS= read -r package; do
+            db_suffix="$(printf '%s' "$package" | sha256sum | cut -c1-12)"
+            database="artex_ci_${db_suffix}"
+            echo "::group::go test $package ($database)"
+            ARTEX_PG_DSN="postgres://postgres:${POSTGRES_PASSWORD}@127.0.0.1:5432/${database}?sslmode=disable" \
+              go test "$package" -count=1
+            echo "::endgroup::"
+          done < <(go list ./...)
 
   frontend:
     name: Frontend checks

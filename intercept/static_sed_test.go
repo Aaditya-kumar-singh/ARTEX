@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"mvdan.cc/sh/v3/syntax"
 )
 
 func TestStaticSedSnapshotsMatchNativeSed(t *testing.T) {
@@ -82,11 +84,41 @@ func TestStaticSedRejectsOpaqueOrUnsafeLayouts(t *testing.T) {
 }
 func TestStaticSedGeneratedInputAndBounds(t *testing.T) {
 	dir := t.TempDir()
-	in := reviewCommandForTest(t, dir, "cat > old.sh <<'SH'\necho old\nSH\nsed 's/old/new/' old.sh > new.sh; bash new.sh")
+	command := "cat > old.sh <<'SH'\necho old\nSH\nsed 's/old/new/' old.sh > new.sh; bash new.sh"
+	in := reviewCommandForTest(t, dir, command)
 	if in.ScriptCaptureStatus != "complete" || in.Scripts[0].Content != "echo new\n" {
+		tree, parseErr := syntax.NewParser().Parse(strings.NewReader(command), "review")
+		if parseErr == nil && len(tree.Stmts) >= 2 {
+			allowSed := staticSedCommandUnshadowed(tree)
+			remaining := 8192
+			prefixKnown := staticSedPrefixKnown(tree, tree.Stmts[1], &remaining)
+			generated := map[string]scriptReference{}
+			catCall, catOK := tree.Stmts[0].Cmd.(*syntax.CallExpr)
+			var catWrites []scriptReference
+			if catOK {
+				catWrites = generatedScriptWrites(tree.Stmts[0], catCall.Args, dir, true, generated, false)
+			}
+			for _, ref := range catWrites {
+				generated[ref.path] = ref
+			}
+			sedCall, sedOK := tree.Stmts[1].Cmd.(*syntax.CallExpr)
+			var sedWrites []scriptReference
+			if sedOK {
+				sedWrites = generatedScriptWrites(tree.Stmts[1], sedCall.Args, dir, true, generated, allowSed && prefixKnown)
+			}
+			t.Logf("PATH=%q allowSed=%t prefixKnown=%t catWrites=%+v sedWrites=%+v", os.Getenv("PATH"), allowSed, prefixKnown, catWrites, sedWrites)
+		} else {
+			t.Logf("diagnostic parse error=%v", parseErr)
+		}
+		for _, name := range []string{"cat", "sed"} {
+			path, err := exec.LookPath(name)
+			resolved, resolveErr := filepath.EvalSymlinks(path)
+			t.Logf("command=%s path=%q err=%v resolved=%q resolveErr=%v native=%t", name, path, err, resolved, resolveErr, nativeInterpreterFile(resolved))
+		}
 		t.Fatalf("known virtual input ignored: %+v", in)
 	}
-	in = reviewCommandForTest(t, dir, "cat > old.sh <<'SH'\necho old\nSH\nsed 's/old/next/' old.sh > next.sh; sed 's/next/final/' next.sh > final.sh; bash final.sh")
+	command = "cat > old.sh <<'SH'\necho old\nSH\nsed 's/old/next/' old.sh > next.sh; sed 's/next/final/' next.sh > final.sh; bash final.sh"
+	in = reviewCommandForTest(t, dir, command)
 	if in.ScriptCaptureStatus != "complete" || in.Scripts[0].Content != "echo final\n" {
 		t.Fatalf("known transform chain lost: %+v", in)
 	}
@@ -101,7 +133,6 @@ func TestStaticSedGeneratedInputAndBounds(t *testing.T) {
 		t.Fatal("unbounded substitution list accepted")
 	}
 }
-
 func TestStaticSedPrefixAnalysisBound(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "old.sh"), []byte("echo old\n"), 0600); err != nil {
