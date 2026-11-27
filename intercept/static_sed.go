@@ -147,8 +147,10 @@ func generatedSedSnapshot(stmt *syntax.Stmt, args []*syntax.Word, dir, target st
 	if err != nil {
 		return "", "", false
 	}
-	executable, err = filepath.EvalSymlinks(executable)
-	if err != nil || (executable != "/bin/sed" && executable != "/usr/bin/sed") || !nativeInterpreterFile(executable) {
+	resolved, err := filepath.EvalSymlinks(executable)
+	// LookPath must resolve to the canonical system command entry. Its symlink
+	// target may live in a distro-managed native coreutils directory.
+	if err != nil || (executable != "/bin/sed" && executable != "/usr/bin/sed") || !nativeInterpreterFile(resolved) {
 		return "", "", false
 	}
 	program, known := staticWord(args[1])
@@ -311,8 +313,10 @@ func staticSedPrefixKnown(tree *syntax.File, target *syntax.Stmt, remaining *int
 					safe = false
 					break
 				}
-				executable, err = filepath.EvalSymlinks(executable)
-				if err != nil || (executable != "/bin/"+base && executable != "/usr/bin/"+base) || !nativeInterpreterFile(executable) {
+				resolved, err := filepath.EvalSymlinks(executable)
+				// Keep the command lookup pinned to /bin or /usr/bin, but follow
+				// distro-managed symlinks when checking the native executable.
+				if err != nil || (executable != "/bin/"+base && executable != "/usr/bin/"+base) || !nativeInterpreterFile(resolved) {
 					safe = false
 					break
 				}
