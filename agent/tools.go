@@ -528,6 +528,49 @@ func (t *ToolSet) graphOverviewData() map[string]any {
 	if t.as != nil && t.ts != nil && t.taskID > 0 {
 		{
 			m := map[string]any{}
+			// Keep the authorization boundary visible to planners even when coverage
+			// metrics are disabled. Direct-source scopes are read-only and retain provenance.
+			if scopes, err := t.as.ListTaskScopeWithSources(t.taskID); err == nil {
+				companiesByID := map[int64]*db.CompanyWithScope{}
+				if t.cs != nil {
+					if companies, err := t.cs.ListCompaniesForTask(t.taskID); err == nil {
+						for _, company := range companies {
+							companiesByID[company.ID] = company
+						}
+					}
+				}
+				scopeRows := make([]map[string]any, 0, len(scopes))
+				for _, scope := range scopes {
+					row := map[string]any{"id": scope.ID, "task_id": scope.TaskID, "kind": scope.Kind, "source": scope.Source}
+					if scope.CompanyID != nil { row["company_id"] = *scope.CompanyID }
+					if scope.CompanyName != "" { row["company_name"] = scope.CompanyName }
+					if scope.Domain != "" { row["domain"] = scope.Domain }
+					if scope.Net != "" { row["net"] = scope.Net }
+					if scope.Value != "" { row["value"] = scope.Value }
+					if scope.Reason != "" { row["reason"] = scope.Reason }
+					if scope.Kind == "company" && scope.CompanyID != nil {
+						companyScope := make([]map[string]any, 0)
+						companyKeywords := make([]string, 0)
+						if company := companiesByID[*scope.CompanyID]; company != nil {
+							companyScope = make([]map[string]any, 0, len(company.Scope))
+							for _, rule := range company.Scope {
+								entry := map[string]any{"id": rule.ID, "company_id": rule.CompanyID, "kind": rule.Kind}
+								if rule.Domain != "" { entry["domain"] = rule.Domain }
+								if rule.Net != "" { entry["net"] = rule.Net }
+								if rule.Value != "" { entry["value"] = rule.Value }
+								if rule.Raw != "" { entry["raw"] = rule.Raw }
+								if rule.Reason != "" { entry["reason"] = rule.Reason }
+								companyScope = append(companyScope, entry)
+								if rule.Kind == "keyword" && rule.Value != "" { companyKeywords = append(companyKeywords, rule.Value) }
+							}
+						}
+						row["company_scope"] = companyScope
+						row["company_keywords"] = companyKeywords
+					}
+					scopeRows = append(scopeRows, row)
+				}
+				m["scope"] = scopeRows
+			}
 			if !t.coverageDisabled {
 				if cov, err := t.as.TaskCoverageWithSources(t.taskID); err == nil {
 					m["denominator"] = cov.Denominator
