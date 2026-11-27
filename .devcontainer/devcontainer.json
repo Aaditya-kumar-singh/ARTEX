@@ -1,0 +1,42 @@
+{
+  "name": "ARTEX development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/ARTEX",
+  "secrets": {
+    "OPENAI_API_KEY": {
+      "description": "Optional OpenAI API key for ARTEX LLM features."
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Optional Anthropic API key for ARTEX LLM features."
+    },
+    "GEMINI_API_KEY": {
+      "description": "Optional Gemini API key for ARTEX LLM features."
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.26.10"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "forwardPorts": [5173, 8787],
+  "portsAttributes": {
+    "5173": {
+      "label": "ARTEX web UI",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    },
+    "8787": {
+      "label": "ARTEX API and MCP",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/start-services.sh",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode"
+}

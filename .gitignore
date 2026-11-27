@@ -60,3 +60,7 @@ Thumbs.db
 /bench/
 /Dockerfile.bench
 /Dockerfile.bench.v2
+
+# GitHub Codespaces logs and process markers
+.codespaces-*.log
+.codespaces-*.pid

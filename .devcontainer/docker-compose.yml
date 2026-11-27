@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: artex
+      # Disposable development-only credential. The database is private to the
+      # Codespaces Compose network and has no published host port. Never use in production.
+      POSTGRES_PASSWORD: artex-codespaces-dev-only
+      POSTGRES_DB: artex
+    volumes:
+      - artex-codespaces-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artex -d artex"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  workspace:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    init: true
+    working_dir: /workspaces/ARTEX
+    volumes:
+      - ..:/workspaces/ARTEX:cached
+    environment:
+      ARTEX_PG_DSN: "postgres://artex:artex-codespaces-dev-only@postgres:5432/artex?sslmode=disable"
+      ARTEX_SKILL_DIR: /workspaces/ARTEX/skills
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  artex-codespaces-pgdata:
